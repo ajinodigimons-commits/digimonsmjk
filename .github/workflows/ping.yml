@@ -1,0 +1,17 @@
+name: Ping Supabase
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping Supabase
+        run: |
+          curl -X GET "https://tysfajvaohxkmwmznego.supabase.co/rest/v1/ping" \
+          -H "apikey: sb_publishable_xIO4vPU5oJg70gngJkR_7w_4oNs4vr-" \
+          -H "Authorization: Bearer sb_publishable_xIO4vPU5oJg70gngJkR_7w_4oNs4vr-"
