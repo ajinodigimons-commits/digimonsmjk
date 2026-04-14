@@ -456,7 +456,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
                     {checklistColumns.map(c => {
                       const answer = row.answers[c.id];
                       const display = formatAnswer(answer);
-                      const isDateExpiry = c.question_type === 'date' && c.question.toLowerCase().includes('kedaluwarsa');
+                      const isDateExpiry = c.question_type === 'date' && (c.question.toLowerCase().includes('kedaluwarsa') || c.question.toLowerCase().includes('kedaluarsa'));
                       
                       if (isDateExpiry) {
                         const status = getExpiryStatus(row.tanggalKedaluwarsa);
