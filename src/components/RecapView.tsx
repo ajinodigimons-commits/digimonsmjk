@@ -91,15 +91,17 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
 
     rows.sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime());
 
-    if (!filterDateFrom && !filterDateTo && !filterOfficer && !filterLocation && !filterKode && !filterCategory && !filterK3lm) {
-      const seen = new Set<string>();
-      return rows.filter(r => {
-        if (seen.has(r.equipmentId)) return false;
-        seen.add(r.equipmentId);
-        return true;
-      });
+    // When date filters are active, show ALL inspections in range
+    if (filterDateFrom || filterDateTo) {
+      return rows;
     }
-    return rows;
+    // Otherwise, show only the latest inspection per equipment (default)
+    const seen = new Set<string>();
+    return rows.filter(r => {
+      if (seen.has(r.equipmentId)) return false;
+      seen.add(r.equipmentId);
+      return true;
+    });
   }, [equipments, inspections, answers, schedules, profiles, categories, filterDateFrom, filterDateTo, filterOfficer, filterLocation, filterKode, filterCategory, filterK3lm, showAllUsers, isPublic, user]);
 
   const filteredData = useMemo(() => {
