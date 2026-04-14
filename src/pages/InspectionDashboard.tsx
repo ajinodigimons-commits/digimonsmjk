@@ -41,7 +41,7 @@ const InspectionDashboard = () => {
       </div>
 
       <div className="container mx-auto px-3 sm:px-4 pt-6 sm:pt-8 pb-3 sm:pb-4">
-        {activeTab === 'checklist' && <ChecklistView onSubmitSuccess={async () => { await logout(); navigate('/riwayat-inspeksi'); }} />}
+        {activeTab === 'checklist' && <ChecklistView onSubmitSuccess={async () => { navigate('/riwayat-inspeksi'); setTimeout(() => logout(), 500); }} />}
         {activeTab === 'rekap' && <RecapView />}
       </div>
 
