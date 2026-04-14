@@ -50,7 +50,7 @@ const Landing = () => {
       </div>
 
       <div className="container mx-auto px-4 py-6 text-center">
-        <p className="text-sm text-muted-foreground">© 2024 DIGIMONS — Digital Monitoring System</p>
+        <p className="text-sm text-muted-foreground">© 2026 DIGIMONS — HSE Departement</p>
       </div>
     </div>
   );
