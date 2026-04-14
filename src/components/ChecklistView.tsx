@@ -48,7 +48,7 @@ const AnswerInput = ({ item, value, onChange }: { item: ChecklistItemRow; value:
   return null;
 };
 
-const ChecklistView = () => {
+const ChecklistView = ({ onSubmitSuccess }: { onSubmitSuccess?: () => Promise<void> | void }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: categories = [] } = useCategories();
@@ -173,6 +173,7 @@ const ChecklistView = () => {
       setSelectedEquipment('');
       setOfficerName('');
       clearSignature();
+      if (onSubmitSuccess) await onSubmitSuccess();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
