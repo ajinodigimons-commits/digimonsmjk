@@ -434,7 +434,6 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
                   {checklistColumns.map((c, i) => (
                     <th key={c.id} className="px-2 py-2.5 text-center font-semibold whitespace-nowrap" title={c.question}>Q{i + 1}</th>
                   ))}
-                  <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Kedaluwarsa</th>
                   <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Tgl Cek</th>
                 </tr>
               </thead>
@@ -455,21 +454,25 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
                     )}
                     <td className="px-3 py-2 whitespace-nowrap">{row.officerName}</td>
                     {checklistColumns.map(c => {
-                      const display = formatAnswer(row.answers[c.id]);
+                      const answer = row.answers[c.id];
+                      const display = formatAnswer(answer);
+                      const isDateExpiry = c.question_type === 'date' && c.question.toLowerCase().includes('kedaluwarsa');
+                      
+                      if (isDateExpiry) {
+                        const status = getExpiryStatus(row.tanggalKedaluwarsa);
+                        return (
+                          <td key={c.id} className={`px-2 py-2 text-center font-semibold whitespace-nowrap ${expiryColorClass(status)}`}>
+                            {row.tanggalKedaluwarsa ? format(new Date(row.tanggalKedaluwarsa), 'dd MMM yy') : display}
+                          </td>
+                        );
+                      }
+                      
                       return (
                         <td key={c.id} className={`px-2 py-2 text-center font-semibold ${
                           display === '✓' ? 'text-safety-green' : display === '✗' ? 'text-safety-red' : ''
                         }`}>{display}</td>
                       );
                     })}
-                    {(() => {
-                      const status = getExpiryStatus(row.tanggalKedaluwarsa);
-                      return (
-                        <td className={`px-3 py-2 whitespace-nowrap font-semibold rounded ${expiryColorClass(status)}`}>
-                          {row.tanggalKedaluwarsa ? format(new Date(row.tanggalKedaluwarsa), 'dd MMM yy') : '-'}
-                        </td>
-                      );
-                    })()}
                     <td className={`px-3 py-2 whitespace-nowrap font-semibold ${
                       row.isOverdue ? 'text-destructive' : 'text-safety-green'
                     }`}>
