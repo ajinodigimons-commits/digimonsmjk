@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCategories, useEquipments, useChecklistItems, useInspections, useInspectionAnswers, useSchedules, useProfiles } from '@/hooks/useSupabaseData';
-import { format, addMonths, isBefore } from 'date-fns';
+import { format, addMonths, isBefore, subDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -22,7 +22,23 @@ interface RecapRow {
   checkedAt: string;
   answers: Record<string, string>;
   isOverdue: boolean;
+  tanggalKedaluwarsa: string | null;
 }
+
+const getExpiryStatus = (dateStr: string | null): 'normal' | 'warning' | 'expired' => {
+  if (!dateStr) return 'normal';
+  const expiry = new Date(dateStr);
+  const now = new Date();
+  if (isBefore(expiry, now)) return 'expired';
+  if (isBefore(expiry, addMonths(now, 0)) || isBefore(subDays(expiry, 30), now)) return 'warning';
+  return 'normal';
+};
+
+const expiryColorClass = (status: 'normal' | 'warning' | 'expired') => {
+  if (status === 'expired') return 'text-destructive bg-destructive/10';
+  if (status === 'warning') return 'text-orange-600 bg-orange-500/10';
+  return '';
+};
 
 const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: boolean; isPublic?: boolean }) => {
   const { user } = useAuth();
@@ -86,6 +102,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
         checkedAt: ins.checked_at,
         answers: answersMap[ins.id] || {},
         isOverdue,
+        tanggalKedaluwarsa: eq.tanggal_kedaluwarsa || null,
       });
     });
 
@@ -417,6 +434,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
                   {checklistColumns.map((c, i) => (
                     <th key={c.id} className="px-2 py-2.5 text-center font-semibold whitespace-nowrap" title={c.question}>Q{i + 1}</th>
                   ))}
+                  <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Kedaluwarsa</th>
                   <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Tgl Cek</th>
                 </tr>
               </thead>
@@ -444,6 +462,14 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
                         }`}>{display}</td>
                       );
                     })}
+                    {(() => {
+                      const status = getExpiryStatus(row.tanggalKedaluwarsa);
+                      return (
+                        <td className={`px-3 py-2 whitespace-nowrap font-semibold rounded ${expiryColorClass(status)}`}>
+                          {row.tanggalKedaluwarsa ? format(new Date(row.tanggalKedaluwarsa), 'dd MMM yy') : '-'}
+                        </td>
+                      );
+                    })()}
                     <td className={`px-3 py-2 whitespace-nowrap font-semibold ${
                       row.isOverdue ? 'text-destructive' : 'text-safety-green'
                     }`}>
