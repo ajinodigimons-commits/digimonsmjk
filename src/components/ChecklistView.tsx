@@ -119,11 +119,34 @@ const ChecklistView = () => {
       toast({ title: 'Error', description: 'Isi nama petugas terlebih dahulu', variant: 'destructive' });
       return;
     }
+
+    // Validate number fields
+    const numberItems = checklist.filter(c => c.question_type === 'number');
+    for (const item of numberItems) {
+      const val = answers[item.id];
+      if (val && (isNaN(Number(val)) || val.trim() === '')) {
+        toast({ title: 'Error', description: `"${item.question}" harus berisi angka yang valid`, variant: 'destructive' });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const now = new Date().toISOString();
       // Update equipment last_check_date
-      await updateEquipment.mutateAsync({ id: selectedEquipment, last_check_date: now });
+      const updatePayload: Partial<{ id: string; last_check_date: string; tanggal_kedaluwarsa: string }> & { id: string } = { id: selectedEquipment, last_check_date: now };
+
+      // Sync Tanggal Kedaluwarsa from checklist answer to master data
+      const expiryItem = checklist.find(c => c.question.toLowerCase().includes('tanggal kedaluwarsa') || c.question.toLowerCase().includes('kedaluwarsa'));
+      if (expiryItem && answers[expiryItem.id]) {
+        const dateVal = answers[expiryItem.id];
+        const parsed = new Date(dateVal);
+        if (!isNaN(parsed.getTime())) {
+          updatePayload.tanggal_kedaluwarsa = parsed.toISOString().split('T')[0];
+        }
+      }
+
+      await updateEquipment.mutateAsync(updatePayload);
 
       // Insert inspection header + answers in one mutation
       await addInspection.mutateAsync({
