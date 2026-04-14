@@ -27,7 +27,7 @@ interface RecapRow {
 const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: boolean; isPublic?: boolean }) => {
   const { user } = useAuth();
   const { data: categories = [] } = useCategories();
-  const { data: equipments = [] } = useEquipments(true);
+  const { data: equipments = [] } = useEquipments(true); // always fetch all, filter in JS
   const { data: checklistItems = [] } = useChecklistItems();
   const { data: inspections = [] } = useInspections();
   const inspectionIds = useMemo(() => inspections.map(i => i.id), [inspections]);
@@ -44,14 +44,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
   const [filterLocation, setFilterLocation] = useState('');
   const [filterKode, setFilterKode] = useState('');
 
-  // ✅ FIX: Filter categoryNames berdasarkan equipment milik user (bukan semua kategori)
-  const categoryNames = useMemo(() => {
-    const userEquipments = showAllUsers || isPublic
-      ? equipments
-      : equipments.filter(e => e.user_id === user?.id);
-    const usedCategories = new Set(userEquipments.map(e => e.category));
-    return categories.filter(c => usedCategories.has(c.name)).map(c => c.name);
-  }, [categories, equipments, showAllUsers, isPublic, user]);
+  const categoryNames = categories.map(c => c.name);
 
   // Unique K3LM/sections from profiles
   const k3lmSections = useMemo(() => {
@@ -59,6 +52,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
   }, [profiles]);
 
   const recapData = useMemo(() => {
+    // Build answers lookup: inspection_id -> { checklist_item_id: answer }
     const answersMap: Record<string, Record<string, string>> = {};
     answers.forEach(a => {
       if (!answersMap[a.inspection_id]) answersMap[a.inspection_id] = {};
@@ -70,6 +64,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
       const eq = equipments.find(e => e.id === ins.equipment_id);
       if (!eq) return;
 
+      // For user view: filter to only logged-in user's equipment
       if (!showAllUsers && !isPublic && user && eq.user_id !== user.id) return;
 
       const profile = profiles.find(p => p.id === eq.user_id);
@@ -137,6 +132,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
     if (!answer) return '-';
     if (answer === 'Ya') return '✓';
     if (answer === 'Tidak') return '✗';
+    // Format date answers (ISO date strings like "2026-04-23" or "2026-04-23T...")
     if (/^\d{4}-\d{2}-\d{2}/.test(answer)) {
       try {
         return format(new Date(answer), 'dd MMM yy');
@@ -186,13 +182,16 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
+    // --- HEADER: Logo image top-left ---
     const logoImg = new Image();
     logoImg.src = '/images/Kop_Surat_Ajinomoto.png';
 
     const generatePdfContent = () => {
+      // Add logo at top-left
       try {
         doc.addImage(logoImg, 'PNG', 14, 8, 80, 20);
       } catch {
+        // fallback text if image fails
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
         doc.text('PT AJINOMOTO INDONESIA', 14, 15);
@@ -232,11 +231,12 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
           if (hookData.section === 'body') {
             const rowIdx = hookData.row.index;
             const lastColIdx = hookData.row.cells.length ? Object.keys(hookData.row.cells).length - 1 : -1;
+            // Color the last column (Tanggal Cek) based on overdue status
             if (hookData.column.index === lastColIdx) {
               if (filteredData[rowIdx]?.isOverdue) {
-                hookData.cell.styles.textColor = [220, 38, 38];
+                hookData.cell.styles.textColor = [220, 38, 38]; // red
               } else {
-                hookData.cell.styles.textColor = [22, 163, 74];
+                hookData.cell.styles.textColor = [22, 163, 74]; // green
               }
               hookData.cell.styles.fontStyle = 'bold';
             }
@@ -244,18 +244,21 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
         },
       });
 
+      // --- FOOTER: Signature fields ---
       const finalY = (doc as any).lastAutoTable?.finalY || (startY + 30);
       const sigY = Math.min(finalY + 15, pageHeight - 40);
 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
 
+      // Left signature: Ketua K3LM
       const sigLeftX = 50;
       doc.text('Mengetahui,', sigLeftX, sigY, { align: 'center' });
       doc.text('Ketua K3LM', sigLeftX, sigY + 5, { align: 'center' });
       doc.line(sigLeftX - 25, sigY + 25, sigLeftX + 25, sigY + 25);
       doc.text('(..............................)', sigLeftX, sigY + 30, { align: 'center' });
 
+      // Right signature: Safety Representative
       const sigRightX = pageWidth - 50;
       doc.text('Mengetahui,', sigRightX, sigY, { align: 'center' });
       doc.text('Safety Representative', sigRightX, sigY + 5, { align: 'center' });
@@ -265,6 +268,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
       doc.save(`Rekap_Pengecekan_${format(new Date(), 'yyyyMMdd')}.pdf`);
     };
 
+    // Load image first, then generate
     logoImg.onload = generatePdfContent;
     logoImg.onerror = generatePdfContent;
   };
@@ -301,7 +305,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
         </div>
       </div>
 
-      {/* Filter Kategori: dropdown untuk admin/public, pills untuk user biasa */}
+      {/* Category filter: dropdown for admin/public, pills for user */}
       {(showAllUsers || isPublic) ? (
         <div className="glass-card rounded-xl p-3">
           <Label className="text-xs font-medium mb-1 block">Filter Alat Emergency</Label>
@@ -317,7 +321,6 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
           </select>
         </div>
       ) : (
-        // ✅ FIX: Pill buttons sekarang hanya tampil kategori yang dimiliki user
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button
             onClick={() => setFilterCategory('')}
@@ -341,7 +344,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
         </div>
       )}
 
-      {/* K3LM dropdown — hanya untuk admin & public */}
+      {/* K3LM dropdown filter — shown for admin & public views */}
       {(showAllUsers || isPublic) && (
         <div className="glass-card rounded-xl p-3">
           <Label className="text-xs font-medium mb-1 block">Filter K3LM / Section</Label>
