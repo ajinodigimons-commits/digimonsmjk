@@ -9,7 +9,7 @@ import { id as idLocale } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { useCategories, useEquipments, useEquipmentMutations, useChecklistItems, useInspectionMutations, ChecklistItemRow } from '@/hooks/useSupabaseData';
+import { useCategories, useEquipments, useEquipmentMutations, useChecklistItems, useInspectionMutations, ChecklistItemRow, EquipmentRow } from '@/hooks/useSupabaseData';
 
 const AnswerInput = ({ item, value, onChange }: { item: ChecklistItemRow; value: string; onChange: (v: string) => void }) => {
   const type = item.question_type || 'multiple_choice';
@@ -133,20 +133,24 @@ const ChecklistView = () => {
     setIsSubmitting(true);
     try {
       const now = new Date().toISOString();
-      // Update equipment last_check_date
-      const updatePayload: Partial<{ id: string; last_check_date: string; tanggal_kedaluwarsa: string }> & { id: string } = { id: selectedEquipment, last_check_date: now };
+      // Update equipment last_check_date + sync kedaluwarsa
+      const updateData: Partial<EquipmentRow> & { id: string } = { id: selectedEquipment, last_check_date: now };
 
       // Sync Tanggal Kedaluwarsa from checklist answer to master data
-      const expiryItem = checklist.find(c => c.question.toLowerCase().includes('tanggal kedaluwarsa') || c.question.toLowerCase().includes('kedaluwarsa'));
+      // Match any date-type question containing "kedaluwarsa" (handles typos like "kedaluarsa" too)
+      const expiryItem = checklist.find(c => 
+        c.question_type === 'date' && 
+        (c.question.toLowerCase().includes('kedaluwarsa') || c.question.toLowerCase().includes('kedaluarsa'))
+      );
       if (expiryItem && answers[expiryItem.id]) {
         const dateVal = answers[expiryItem.id];
         const parsed = new Date(dateVal);
         if (!isNaN(parsed.getTime())) {
-          updatePayload.tanggal_kedaluwarsa = parsed.toISOString().split('T')[0];
+          updateData.tanggal_kedaluwarsa = parsed.toISOString().split('T')[0];
         }
       }
 
-      await updateEquipment.mutateAsync(updatePayload);
+      await updateEquipment.mutateAsync(updateData);
 
       // Insert inspection header + answers in one mutation
       await addInspection.mutateAsync({
