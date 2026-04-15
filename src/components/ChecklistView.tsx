@@ -1,13 +1,11 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { ChevronDown, CalendarIcon } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useCategories, useEquipments, useEquipmentMutations, useChecklistItems, useInspectionMutations, ChecklistItemRow, EquipmentRow } from '@/hooks/useSupabaseData';
 
@@ -28,21 +26,17 @@ const AnswerInput = ({ item, value, onChange }: { item: ChecklistItemRow; value:
     );
   }
   if (type === 'text') return <Input value={value} onChange={e => onChange(e.target.value)} placeholder="Ketik jawaban..." className="rounded-xl" />;
-  if (type === 'number') return <Input type="number" value={value} onChange={e => onChange(e.target.value)} placeholder="Masukkan angka..." className="rounded-xl" />;
+  if (type === 'number') return <Input type="text" inputMode="numeric" pattern="[0-9]*" value={value} onChange={e => { const v = e.target.value.replace(/[^0-9.,]/g, ''); onChange(v); }} placeholder="Masukkan angka..." className="rounded-xl" />;
   if (type === 'date') {
-    const dateValue = value ? new Date(value) : undefined;
+    // Store as YYYY-MM-DD string directly to avoid timezone issues
+    const dateStr = value && value.includes('T') ? value.split('T')[0] : value;
     return (
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className={cn("w-full justify-start text-left font-normal rounded-xl", !dateValue && "text-muted-foreground")}>
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {dateValue ? format(dateValue, 'dd MMM yyyy', { locale: idLocale }) : 'Pilih tanggal...'}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar mode="single" selected={dateValue} onSelect={d => onChange(d ? d.toISOString() : '')} initialFocus className="p-3 pointer-events-auto" />
-        </PopoverContent>
-      </Popover>
+      <input
+        type="date"
+        value={dateStr || ''}
+        onChange={e => onChange(e.target.value)}
+        className="w-full rounded-xl border border-input bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
     );
   }
   return null;
@@ -120,13 +114,17 @@ const ChecklistView = ({ onSubmitSuccess }: { onSubmitSuccess?: () => Promise<vo
       return;
     }
 
-    // Validate number fields
+    // Validate number fields - normalize comma to dot
     const numberItems = checklist.filter(c => c.question_type === 'number');
     for (const item of numberItems) {
-      const val = answers[item.id];
-      if (val && (isNaN(Number(val)) || val.trim() === '')) {
-        toast({ title: 'Error', description: `"${item.question}" harus berisi angka yang valid`, variant: 'destructive' });
-        return;
+      const raw = answers[item.id];
+      if (raw) {
+        const normalized = raw.replace(/,/g, '.');
+        if (isNaN(Number(normalized)) || normalized.trim() === '') {
+          toast({ title: 'Error', description: `"${item.question}" harus berisi angka yang valid`, variant: 'destructive' });
+          return;
+        }
+        answers[item.id] = normalized;
       }
     }
 
@@ -144,9 +142,10 @@ const ChecklistView = ({ onSubmitSuccess }: { onSubmitSuccess?: () => Promise<vo
       );
       if (expiryItem && answers[expiryItem.id]) {
         const dateVal = answers[expiryItem.id];
-        const parsed = new Date(dateVal);
-        if (!isNaN(parsed.getTime())) {
-          updateData.tanggal_kedaluwarsa = parsed.toISOString().split('T')[0];
+        // Use date string directly (YYYY-MM-DD) to avoid timezone shift
+        const dateOnly = dateVal.includes('T') ? dateVal.split('T')[0] : dateVal;
+        if (dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+          updateData.tanggal_kedaluwarsa = dateOnly;
         }
       }
 
