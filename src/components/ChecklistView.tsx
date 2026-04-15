@@ -181,7 +181,7 @@ const ChecklistView = ({ onSubmitSuccess }: { onSubmitSuccess?: () => Promise<vo
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pt-4">
       <div className="flex gap-2 overflow-x-auto pb-2">
         {categoryNames.map(cat => (
           <button key={cat} onClick={() => { setSelectedCategory(cat); setSelectedEquipment(''); setAnswers({}); }}
