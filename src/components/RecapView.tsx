@@ -446,7 +446,18 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
                     }`}
                   >
                     <td className="px-3 py-2">{idx + 1}</td>
-                    <td className="px-3 py-2 font-medium whitespace-nowrap">{row.kode}</td>
+                    <td className="px-3 py-2 font-medium whitespace-nowrap">
+                      {row.kode}
+                      {(() => {
+                        const hasExpired = getExpiryStatus(row.tanggalKedaluwarsa) === 'expired';
+                        const hasTidak = Object.values(row.answers).some(a => a === 'Tidak');
+                        return (hasExpired || hasTidak) ? (
+                          <span className="ml-1.5 inline-flex items-center text-[9px] font-medium text-destructive bg-destructive/10 rounded px-1 py-0.5 leading-none">
+                            perlu ditindaklanjuti
+                          </span>
+                        ) : null;
+                      })()}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">{row.lokasi}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{row.category}</td>
                     {(showAllUsers || isPublic) && (
