@@ -5,7 +5,7 @@ import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 interface AppUser {
   id: string;
   name: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'user2' | 'admin';
   section?: string;
 }
 
@@ -15,6 +15,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
   isAdmin: boolean;
+  isUser2: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -43,7 +44,7 @@ const buildAppUser = async (supaUser: SupabaseUser): Promise<AppUser> => {
   return {
     id: supaUser.id,
     name: profile?.name || supaUser.email || 'User',
-    role: (roleData?.role as 'admin' | 'user') || 'user',
+    role: (roleData?.role as 'admin' | 'user' | 'user2') || 'user',
     section: profile?.section || undefined,
   };
 };
@@ -99,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin: user?.role === 'admin', isUser2: user?.role === 'user2' }}>
       {children}
     </AuthContext.Provider>
   );
