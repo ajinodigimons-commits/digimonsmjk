@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Database, CalendarDays, BookOpen, LogOut, BarChart3 } from 'lucide-react';
+import { Shield, Database, CalendarDays, BookOpen, LogOut, BarChart3, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import MasterData from '@/components/MasterData';
@@ -8,10 +8,12 @@ import MasterData from '@/components/MasterData';
 import ScheduleView from '@/components/ScheduleView';
 import RecapView from '@/components/RecapView';
 import InspectionTable from '@/components/InspectionTable';
+import ChecklistView from '@/components/ChecklistView';
+import { useToast } from '@/hooks/use-toast';
 
-type Tab = 'beranda' | 'master' | 'jadwal' | 'rekap';
+type Tab = 'beranda' | 'master' | 'jadwal' | 'rekap' | 'checklist';
 
-const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+const BASE_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'beranda', label: 'Beranda', icon: BookOpen },
   { id: 'master', label: 'Data Alat', icon: Database },
   { id: 'jadwal', label: 'Jadwal', icon: CalendarDays },
@@ -19,11 +21,29 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 ];
 
 const UserDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isUser2 } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('beranda');
 
+  const TABS = useMemo(() => {
+    if (isUser2) {
+      return [
+        ...BASE_TABS.slice(0, 2),
+        { id: 'checklist' as Tab, label: 'Checklist', icon: ClipboardCheck },
+        ...BASE_TABS.slice(2),
+      ];
+    }
+    return BASE_TABS;
+  }, [isUser2]);
+
   const handleLogout = async () => { await logout(); navigate('/'); };
+
+  const handleChecklistSubmit = async () => {
+    // user2: tidak auto logout, kembali ke beranda
+    toast({ title: 'Berhasil', description: 'Inspeksi tersimpan' });
+    setActiveTab('beranda');
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -55,7 +75,7 @@ const UserDashboard = () => {
           </div>
         )}
         {activeTab === 'master' && <MasterData />}
-        
+        {activeTab === 'checklist' && isUser2 && <ChecklistView onSubmitSuccess={handleChecklistSubmit} />}
         {activeTab === 'jadwal' && <ScheduleView />}
         {activeTab === 'rekap' && <RecapView />}
       </div>
