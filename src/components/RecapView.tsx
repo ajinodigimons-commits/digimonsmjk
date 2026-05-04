@@ -279,7 +279,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
 
       // Right signature: Safety Representative
       const sigRightX = pageWidth - 50;
-      doc.text('Mengetahui,', sigRightX, sigY, { align: 'center' });
+      doc.text('', sigRightX, sigY, { align: 'center' });
       doc.text('Safety Representative', sigRightX, sigY + 5, { align: 'center' });
       doc.line(sigRightX - 25, sigY + 25, sigRightX + 25, sigY + 25);
       doc.text('(..............................)', sigRightX, sigY + 30, { align: 'center' });
