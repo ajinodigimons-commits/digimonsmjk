@@ -99,12 +99,22 @@ export const useEquipments = (showAllUsers = false) => {
   return useQuery({
     queryKey: ['equipments', showAllUsers, user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('equipments')
-        .select('*')
-        .order('created_at');
-      if (error) throw error;
-      return (data || []) as EquipmentRow[];
+      const all: EquipmentRow[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('equipments')
+          .select('*')
+          .order('created_at')
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const rows = (data || []) as EquipmentRow[];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
     },
   });
 };
@@ -309,12 +319,22 @@ export const useInspections = () => {
   return useQuery({
     queryKey: ['inspections'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('inspections')
-        .select('*')
-        .order('checked_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as InspectionRow[];
+      const all: InspectionRow[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('inspections')
+          .select('*')
+          .order('checked_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const rows = (data || []) as InspectionRow[];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
     },
   });
 };
