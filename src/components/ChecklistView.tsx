@@ -1,13 +1,15 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { useCategories, useEquipments, useEquipmentMutations, useChecklistItems, useInspectionMutations, ChecklistItemRow, EquipmentRow } from '@/hooks/useSupabaseData';
+import { useCategories, useEquipments, useEquipmentMutations, useChecklistItems, useInspectionMutations, ChecklistItemRow } from '@/hooks/useSupabaseData';
 
 const AnswerInput = ({ item, value, onChange }: { item: ChecklistItemRow; value: string; onChange: (v: string) => void }) => {
   const type = item.question_type || 'multiple_choice';
@@ -26,23 +28,56 @@ const AnswerInput = ({ item, value, onChange }: { item: ChecklistItemRow; value:
     );
   }
   if (type === 'text') return <Input value={value} onChange={e => onChange(e.target.value)} placeholder="Ketik jawaban..." className="rounded-xl" />;
-  if (type === 'number') return <Input type="text" inputMode="numeric" pattern="[0-9]*" value={value} onChange={e => { const v = e.target.value.replace(/[^0-9.,]/g, ''); onChange(v); }} placeholder="Masukkan angka..." className="rounded-xl" />;
+  if (type === 'number') return <Input type="number" value={value} onChange={e => onChange(e.target.value)} placeholder="Masukkan angka..." className="rounded-xl" />;
   if (type === 'date') {
-    // Store as YYYY-MM-DD string directly to avoid timezone issues
-    const dateStr = value && value.includes('T') ? value.split('T')[0] : value;
+    // Parse stored YYYY-MM-DD (or legacy ISO) safely as local date
+    const dateValue = (() => {
+      if (!value) return undefined;
+      const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? undefined : d;
+    })();
     return (
-      <input
-        type="date"
-        value={dateStr || ''}
-        onChange={e => onChange(e.target.value)}
-        className="w-full rounded-xl border border-input bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      <DatePickerField
+        dateValue={dateValue}
+        onSelect={(d) => {
+          if (!d) return onChange('');
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          onChange(`${yyyy}-${mm}-${dd}`);
+        }}
       />
     );
   }
   return null;
 };
 
-const ChecklistView = ({ onSubmitSuccess }: { onSubmitSuccess?: () => Promise<void> | void }) => {
+const DatePickerField = ({ dateValue, onSelect }: { dateValue: Date | undefined; onSelect: (d: Date | undefined) => void }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className={cn("w-full justify-start text-left font-normal rounded-xl", !dateValue && "text-muted-foreground")}>
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {dateValue ? format(dateValue, 'dd MMM yyyy', { locale: idLocale }) : 'Pilih tanggal...'}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={dateValue}
+          onSelect={(d) => { onSelect(d); setOpen(false); }}
+          initialFocus
+          className="p-3 pointer-events-auto"
+        />
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const ChecklistView = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: categories = [] } = useCategories();
@@ -113,43 +148,11 @@ const ChecklistView = ({ onSubmitSuccess }: { onSubmitSuccess?: () => Promise<vo
       toast({ title: 'Error', description: 'Isi nama petugas terlebih dahulu', variant: 'destructive' });
       return;
     }
-
-    // Validate number fields - normalize comma to dot
-    const numberItems = checklist.filter(c => c.question_type === 'number');
-    for (const item of numberItems) {
-      const raw = answers[item.id];
-      if (raw) {
-        const normalized = raw.replace(/,/g, '.');
-        if (isNaN(Number(normalized)) || normalized.trim() === '') {
-          toast({ title: 'Error', description: `"${item.question}" harus berisi angka yang valid`, variant: 'destructive' });
-          return;
-        }
-        answers[item.id] = normalized;
-      }
-    }
-
     setIsSubmitting(true);
     try {
       const now = new Date().toISOString();
-      // Update equipment last_check_date + sync kedaluwarsa
-      const updateData: Partial<EquipmentRow> & { id: string } = { id: selectedEquipment, last_check_date: now };
-
-      // Sync Tanggal Kedaluwarsa from checklist answer to master data
-      // Match any date-type question containing "kedaluwarsa" (handles typos like "kedaluarsa" too)
-      const expiryItem = checklist.find(c => 
-        c.question_type === 'date' && 
-        (c.question.toLowerCase().includes('kedaluwarsa') || c.question.toLowerCase().includes('kedaluarsa'))
-      );
-      if (expiryItem && answers[expiryItem.id]) {
-        const dateVal = answers[expiryItem.id];
-        // Use date string directly (YYYY-MM-DD) to avoid timezone shift
-        const dateOnly = dateVal.includes('T') ? dateVal.split('T')[0] : dateVal;
-        if (dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
-          updateData.tanggal_kedaluwarsa = dateOnly;
-        }
-      }
-
-      await updateEquipment.mutateAsync(updateData);
+      // Update equipment last_check_date
+      await updateEquipment.mutateAsync({ id: selectedEquipment, last_check_date: now });
 
       // Insert inspection header + answers in one mutation
       await addInspection.mutateAsync({
@@ -172,7 +175,6 @@ const ChecklistView = ({ onSubmitSuccess }: { onSubmitSuccess?: () => Promise<vo
       setSelectedEquipment('');
       setOfficerName('');
       clearSignature();
-      if (onSubmitSuccess) await onSubmitSuccess();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -181,7 +183,7 @@ const ChecklistView = ({ onSubmitSuccess }: { onSubmitSuccess?: () => Promise<vo
   };
 
   return (
-    <div className="space-y-4 pt-4">
+    <div className="space-y-4">
       <div className="flex gap-2 overflow-x-auto pb-2">
         {categoryNames.map(cat => (
           <button key={cat} onClick={() => { setSelectedCategory(cat); setSelectedEquipment(''); setAnswers({}); }}
