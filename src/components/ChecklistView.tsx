@@ -30,22 +30,51 @@ const AnswerInput = ({ item, value, onChange }: { item: ChecklistItemRow; value:
   if (type === 'text') return <Input value={value} onChange={e => onChange(e.target.value)} placeholder="Ketik jawaban..." className="rounded-xl" />;
   if (type === 'number') return <Input type="number" value={value} onChange={e => onChange(e.target.value)} placeholder="Masukkan angka..." className="rounded-xl" />;
   if (type === 'date') {
-    const dateValue = value ? new Date(value) : undefined;
+    // Parse stored YYYY-MM-DD (or legacy ISO) safely as local date
+    const dateValue = (() => {
+      if (!value) return undefined;
+      const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? undefined : d;
+    })();
     return (
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className={cn("w-full justify-start text-left font-normal rounded-xl", !dateValue && "text-muted-foreground")}>
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {dateValue ? format(dateValue, 'dd MMM yyyy', { locale: idLocale }) : 'Pilih tanggal...'}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar mode="single" selected={dateValue} onSelect={d => onChange(d ? d.toISOString() : '')} initialFocus className="p-3 pointer-events-auto" />
-        </PopoverContent>
-      </Popover>
+      <DatePickerField
+        dateValue={dateValue}
+        onSelect={(d) => {
+          if (!d) return onChange('');
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          onChange(`${yyyy}-${mm}-${dd}`);
+        }}
+      />
     );
   }
   return null;
+};
+
+const DatePickerField = ({ dateValue, onSelect }: { dateValue: Date | undefined; onSelect: (d: Date | undefined) => void }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className={cn("w-full justify-start text-left font-normal rounded-xl", !dateValue && "text-muted-foreground")}>
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {dateValue ? format(dateValue, 'dd MMM yyyy', { locale: idLocale }) : 'Pilih tanggal...'}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={dateValue}
+          onSelect={(d) => { onSelect(d); setOpen(false); }}
+          initialFocus
+          className="p-3 pointer-events-auto"
+        />
+      </PopoverContent>
+    </Popover>
+  );
 };
 
 const ChecklistView = () => {
