@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCategories, useEquipments, useChecklistItems, useInspections, useInspectionAnswers, useSchedules, useProfiles } from '@/hooks/useSupabaseData';
-import { format, addMonths, isBefore, subDays } from 'date-fns';
+import { format, addMonths, isBefore } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -22,23 +22,7 @@ interface RecapRow {
   checkedAt: string;
   answers: Record<string, string>;
   isOverdue: boolean;
-  tanggalKedaluwarsa: string | null;
 }
-
-const getExpiryStatus = (dateStr: string | null): 'normal' | 'warning' | 'expired' => {
-  if (!dateStr) return 'normal';
-  const expiry = new Date(dateStr);
-  const now = new Date();
-  if (isBefore(expiry, now)) return 'expired';
-  if (isBefore(expiry, addMonths(now, 0)) || isBefore(subDays(expiry, 30), now)) return 'warning';
-  return 'normal';
-};
-
-const expiryColorClass = (status: 'normal' | 'warning' | 'expired') => {
-  if (status === 'expired') return 'text-destructive bg-destructive/10';
-  if (status === 'warning') return 'text-orange-600 bg-orange-500/10';
-  return '';
-};
 
 const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: boolean; isPublic?: boolean }) => {
   const { user } = useAuth();
@@ -102,23 +86,20 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
         checkedAt: ins.checked_at,
         answers: answersMap[ins.id] || {},
         isOverdue,
-        tanggalKedaluwarsa: eq.tanggal_kedaluwarsa || null,
       });
     });
 
     rows.sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime());
 
-    // When date filters are active, show ALL inspections in range
-    if (filterDateFrom || filterDateTo) {
-      return rows;
+    if (!filterDateFrom && !filterDateTo && !filterOfficer && !filterLocation && !filterKode && !filterCategory && !filterK3lm) {
+      const seen = new Set<string>();
+      return rows.filter(r => {
+        if (seen.has(r.equipmentId)) return false;
+        seen.add(r.equipmentId);
+        return true;
+      });
     }
-    // Otherwise, show only the latest inspection per equipment (default)
-    const seen = new Set<string>();
-    return rows.filter(r => {
-      if (seen.has(r.equipmentId)) return false;
-      seen.add(r.equipmentId);
-      return true;
-    });
+    return rows;
   }, [equipments, inspections, answers, schedules, profiles, categories, filterDateFrom, filterDateTo, filterOfficer, filterLocation, filterKode, filterCategory, filterK3lm, showAllUsers, isPublic, user]);
 
   const filteredData = useMemo(() => {
@@ -279,7 +260,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
 
       // Right signature: Safety Representative
       const sigRightX = pageWidth - 50;
-      doc.text('', sigRightX, sigY, { align: 'center' });
+      doc.text('Mengetahui,', sigRightX, sigY, { align: 'center' });
       doc.text('Safety Representative', sigRightX, sigY + 5, { align: 'center' });
       doc.line(sigRightX - 25, sigY + 25, sigRightX + 25, sigY + 25);
       doc.text('(..............................)', sigRightX, sigY + 30, { align: 'center' });
@@ -446,18 +427,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
                     }`}
                   >
                     <td className="px-3 py-2">{idx + 1}</td>
-                    <td className="px-3 py-2 font-medium whitespace-nowrap">
-                      {row.kode}
-                      {(() => {
-                        const hasExpired = getExpiryStatus(row.tanggalKedaluwarsa) === 'expired';
-                        const hasTidak = Object.values(row.answers).some(a => a === 'Tidak');
-                        return (hasExpired || hasTidak) ? (
-                          <span className="ml-1.5 inline-flex items-center text-[9px] font-medium text-destructive bg-destructive/10 rounded px-1 py-0.5 leading-none">
-                            perlu ditindaklanjuti
-                          </span>
-                        ) : null;
-                      })()}
-                    </td>
+                    <td className="px-3 py-2 font-medium whitespace-nowrap">{row.kode}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{row.lokasi}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{row.category}</td>
                     {(showAllUsers || isPublic) && (
@@ -465,19 +435,7 @@ const RecapView = ({ showAllUsers = false, isPublic = false }: { showAllUsers?: 
                     )}
                     <td className="px-3 py-2 whitespace-nowrap">{row.officerName}</td>
                     {checklistColumns.map(c => {
-                      const answer = row.answers[c.id];
-                      const display = formatAnswer(answer);
-                      const isDateExpiry = c.question_type === 'date' && (c.question.toLowerCase().includes('kedaluwarsa') || c.question.toLowerCase().includes('kedaluarsa'));
-                      
-                      if (isDateExpiry) {
-                        const status = getExpiryStatus(row.tanggalKedaluwarsa);
-                        return (
-                          <td key={c.id} className={`px-2 py-2 text-center font-semibold whitespace-nowrap ${expiryColorClass(status)}`}>
-                            {row.tanggalKedaluwarsa ? format(new Date(row.tanggalKedaluwarsa), 'dd MMM yy') : display}
-                          </td>
-                        );
-                      }
-                      
+                      const display = formatAnswer(row.answers[c.id]);
                       return (
                         <td key={c.id} className={`px-2 py-2 text-center font-semibold ${
                           display === '✓' ? 'text-safety-green' : display === '✗' ? 'text-safety-red' : ''
